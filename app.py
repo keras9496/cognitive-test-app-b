@@ -39,6 +39,12 @@ class DigitSpanResult(db.Model):
     def __repr__(self):
         return f'<DigitSpanResult {self.nickname} - Score: {self.high_score}>'
 
+# --- 이 부분을 추가합니다 ---
+# 앱 컨텍스트 안에서 데이터베이스 테이블을 생성합니다.
+# 이렇게 하면 gunicorn으로 실행해도 앱 시작 시 테이블이 생성됩니다.
+with app.app_context():
+    db.create_all()
+
 # --- 라우트(URL 경로) 정의 ---
 
 @app.route("/")
@@ -147,6 +153,7 @@ def show_results():
 
 # --- 애플리케이션 실행 ---
 if __name__ == "__main__":
-    with app.app_context():
-        db.create_all()
+    # 로컬에서 실행할 때만 사용되므로, 아래 라인은 삭제하거나 그대로 두어도 괜찮습니다.
+    # with app.app_context():
+    #     db.create_all()
     app.run(debug=True, port=5001)
