@@ -37,7 +37,7 @@
             stroke-width: 3;
         }
         .text-display-number {
-            font-size: clamp(4rem, 20vw, 12rem); /* 이 부분을 수정했습니다. */
+            font-size: clamp(4rem, 20vw, 12rem);
             font-weight: bold;
             color: #1f2937;
             line-height: 1;
@@ -97,7 +97,7 @@
         let isGameOver = false;
         let chance = 1; 
         let isPracticeRound = true;
-        let failedAttemptsLog = []; // 실패 기록을 저장할 배열
+        let failedAttemptsLog = []; 
 
         createKeypad(); 
 
@@ -236,32 +236,16 @@
                 const result = await response.json();
                 if (result.status === 'success') {
                     console.log('결과가 성공적으로 서버에 저장되었습니다.');
+                    // 다음 테스트로 이동
+                    window.location.href = "{{ url_for('wisconsin_test') }}";
                 } else {
                     console.error('서버에 결과 저장 실패:', result.message);
+                    alert('결과 저장에 실패했습니다. 다시 시도해주세요.');
                 }
             } catch (error) {
                 console.error('결과 전송 중 네트워크 오류 발생:', error);
+                alert('결과 전송 중 오류가 발생했습니다.');
             }
-
-            currentLevel = 2;
-            chance = 1;
-            isPracticeRound = true;
-            failedAttemptsLog = []; 
-            
-            header.style.visibility = 'visible';
-            
-            submitBtn.classList.add('hidden');
-            messageDisplay.classList.remove('hidden');
-            messageDisplay.className = 'text-display-message';
-            messageDisplay.innerHTML = `테스트가 종료되었습니다.`;
-            
-            startBtn.textContent = '처음으로 돌아가기';
-            startBtn.classList.remove('hidden');
-            inputArea.classList.add('hidden');
-            
-            startBtn.onclick = () => {
-                window.location.href = "{{ url_for('index') }}";
-            };
         }
 
         function prepareNextRound(msg, btnText) {

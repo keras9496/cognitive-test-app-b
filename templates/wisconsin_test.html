@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>위스콘신 카드 정렬 검사</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Noto Sans KR', sans-serif;
+            touch-action: manipulation;
+        }
+        .card {
+            border: 2px solid #e2e8f0;
+            border-radius: 1rem;
+            padding: 1rem;
+            background-color: white;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            aspect-ratio: 3 / 4;
+            user-select: none;
+        }
+        .stimulus-card {
+             cursor: pointer;
+        }
+        .stimulus-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -2px rgb(0 0 0 / 0.1);
+        }
+        .shape-container-flex {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            align-items: center;
+            gap: 0.5rem;
+            flex-grow: 1;
+        }
+        .shape {
+            width: 40px;
+            height: 40px;
+        }
+        @media (max-width: 640px) {
+            .shape {
+                width: 24px;
+                height: 24px;
+            }
+            .card {
+                padding: 0.5rem;
+            }
+        }
+        #feedback-symbol, #feedback-text {
+            text-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
+        }
+    </style>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen p-4">
+    <div class="w-full max-w-4xl mx-auto relative">
+        <header class="text-center mb-6">
+            <h1 class="text-3xl md:text-4xl font-bold text-gray-800">위스콘신 카드 정렬 검사</h1>
+            <p id="instruction-text" class="text-gray-600 mt-2">숨겨진 규칙을 찾아 위 카드를 아래 카드 중 하나로 분류하세요.</p>
+        </header>
+
+        <div class="flex flex-col items-center mb-8">
+            <h2 class="text-xl font-semibold mb-3 text-gray-700">분류할 카드</h2>
+            <div id="response-card-container" class="w-32 h-48 md:w-40 md:h-56"></div>
+        </div>
+        
+        <div class="flex flex-col items-center mb-8">
+             <h2 class="text-xl font-semibold mb-3 text-gray-700">아래 카드 중 하나를 선택하세요</h2>
+             <div id="stimulus-cards-container" class="grid grid-cols-4 gap-4 md:gap-6 w-full"></div>
+        </div>
+
+        <div class="text-center mt-6">
+            <button id="home-button" class="hidden bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-6 rounded-lg shadow-md transition-transform transform hover:scale-105">
+                처음으로 돌아가기
+            </button>
+        </div>
+
+        <div id="feedback-overlay" class="hidden absolute inset-0 bg-gray-800 bg-opacity-50 flex flex-col items-center justify-center z-50 rounded-2xl p-4">
+            <span id="feedback-symbol" class="text-9xl md:text-[10rem] font-bold"></span>
+            <p id="feedback-text" class="text-3xl md:text-4xl font-bold text-white mt-2"></p>
+        </div>
+    </div>
+
+    <script>
+        const COLORS = ['#EF4444', '#22C55E', '#EAB308', '#3B82F6'];
+        const SHAPES = ['triangle', 'star', 'square', 'circle'];
+        const COUNTS = [1, 2, 3, 4];
+        const RULES = ['color', 'shape', 'count'];
+        const TOTAL_TRIALS_AFTER_FIRST_CORRECT = 32;
+
+        let stimulusCards = [], responseCard = null, currentRule = '', availableRules = [];
+        let consecutiveCorrect = 0;
+        let isChecking = false, isGameOver = false;
+        let scoringResult;
+        
+        const stimulusContainer = document.getElementById('stimulus-cards-container');
+        const responseContainer = document.getElementById('response-card-container');
+        const homeButton = document.getElementById('home-button');
+        const feedbackOverlay = document.getElementById('feedback-overlay');
+        const feedbackSymbol = document.getElementById('feedback-symbol');
+        const feedbackText = document.getElementById('feedback-text');
+        const instructionText = document.getElementById('instruction-text');
+
+        function initializeScoring() {
+            scoringResult = {
+                perseverativeResponses: 0,
+                trialsToCompleteFirstCategory: 0,
+                failureToMaintainSet: 0,
+                correctCountAfterFirstCorrect: 0,
+                correctRate: 0,
+                isFirstCategoryCompleted: false,
+                isFirstCorrectMade: false,
+                trialCountAfterFirstCorrect: 0,
+                lastIncorrectAppliedRule: null,
+                lastRuleBeforeChange: null,
+            };
+        }
+
+        function findAppliedRule(clickedData, responseData) {
+            if (clickedData.color === responseData.color) return 'color';
+            if (clickedData.shape === responseData.shape) return 'shape';
+            if (parseInt(clickedData.count) === responseData.count) return 'count';
+            return null;
+        }
+
+        function shuffle(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+            return array;
+        }
+
+        function createShapeSVG(shape, color) {
+            const svgNS = "http://www.w3.org/2000/svg";
+            const svg = document.createElementNS(svgNS, "svg");
+            svg.setAttribute("class", "shape");
+            svg.setAttribute("viewBox", "0 0 100 100");
+            let pathData = '';
+            switch (shape) {
+                case 'triangle': pathData = "M50 10 L90 90 H10 Z"; break;
+                case 'star': pathData = "M50 2 L61 38 L98 38 L68 62 L79 98 L50 75 L21 98 L32 62 L2 38 L39 38 Z"; break;
+                case 'square': pathData = "M10 10 H90 V90 H10 Z"; break;
+                case 'circle':
+                    const circle = document.createElementNS(svgNS, "circle");
+                    circle.setAttribute("cx", "50"); circle.setAttribute("cy", "50");
+                    circle.setAttribute("r", "45"); circle.setAttribute("fill", color);
+                    svg.appendChild(circle); return svg;
+            }
+            const path = document.createElementNS(svgNS, "path");
+            path.setAttribute("d", pathData);
+            path.setAttribute("fill", color);
+            svg.appendChild(path); return svg;
+        }
+        
+        function createCardElement(card, isStimulus = false) {
+            const cardDiv = document.createElement('div');
+            cardDiv.className = 'card';
+            if (isStimulus) {
+                cardDiv.classList.add('stimulus-card');
+                cardDiv.dataset.color = card.color;
+                cardDiv.dataset.shape = card.shape;
+                cardDiv.dataset.count = card.count;
+            }
+            const shapeContainer = document.createElement('div');
+            shapeContainer.className = card.count === 4 ? 'grid grid-cols-2 gap-1 md:gap-2 justify-items-center items-center w-full h-full' : 'shape-container-flex w-full h-full';
+            for (let i = 0; i < card.count; i++) {
+                shapeContainer.appendChild(createShapeSVG(card.shape, card.color));
+            }
+            cardDiv.appendChild(shapeContainer);
+            return cardDiv;
+        }
+
+        function generateStimulusCards() {
+            stimulusCards = [];
+            const shuffledColors = shuffle([...COLORS]);
+            const shuffledShapes = shuffle([...SHAPES]);
+            const shuffledCounts = shuffle([...COUNTS]);
+            for (let i = 0; i < 4; i++) {
+                stimulusCards.push({ color: shuffledColors[i], shape: shuffledShapes[i], count: shuffledCounts[i] });
+            }
+        }
+        
+        function generateResponseCard() {
+            let newCard, isDuplicate;
+            do {
+                const indices = shuffle([0, 1, 2, 3]);
+                newCard = { color: stimulusCards[indices[0]].color, shape: stimulusCards[indices[1]].shape, count: stimulusCards[indices[2]].count };
+                isDuplicate = stimulusCards.some(sc => sc.color === newCard.color && sc.shape === newCard.shape && sc.count === newCard.count);
+            } while (isDuplicate);
+            responseCard = newCard;
+        }
+
+        function renderAllCards() {
+            responseContainer.innerHTML = '';
+            responseContainer.appendChild(createCardElement(responseCard));
+            stimulusContainer.innerHTML = '';
+            stimulusCards.forEach(card => {
+                stimulusContainer.appendChild(createCardElement(card, true));
+            });
+        }
+
+        function showFeedback(symbol, text, symbolColor, duration = 1200) {
+            return new Promise(resolve => {
+                feedbackSymbol.textContent = symbol;
+                feedbackSymbol.style.color = symbolColor;
+                feedbackText.textContent = text;
+                feedbackOverlay.classList.remove('hidden');
+                setTimeout(() => {
+                    feedbackOverlay.classList.add('hidden');
+                    resolve();
+                }, duration);
+            });
+        }
+
+        async function handleGameOver() {
+            isGameOver = true;
+            scoringResult.correctRate = (scoringResult.correctCountAfterFirstCorrect / TOTAL_TRIALS_AFTER_FIRST_CORRECT) * 100;
+            instructionText.textContent = '검사가 완료되었습니다. 수고하셨습니다!';
+            console.log("--- 최종 채점 결과 ---");
+            console.log(scoringResult);
+
+            try {
+                const response = await fetch("{{ url_for('submit_wisconsin_result') }}", {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        perseverativeResponses: scoringResult.perseverativeResponses,
+                        trialsToCompleteFirstCategory: scoringResult.trialsToCompleteFirstCategory,
+                        failureToMaintainSet: scoringResult.failureToMaintainSet,
+                        correctRate: scoringResult.correctRate
+                    }),
+                });
+                const result = await response.json();
+                if (result.status === 'success') {
+                    console.log('위스콘신 결과가 성공적으로 서버에 저장되었습니다.');
+                } else {
+                    console.error('서버에 위스콘신 결과 저장 실패:', result.message);
+                }
+            } catch (error) {
+                console.error('위스콘신 결과 전송 중 네트워크 오류 발생:', error);
+            }
+
+            await showFeedback('종료', '검사 완료', '#3B82F6', 3000);
+            homeButton.classList.remove('hidden');
+        }
+        
+        async function checkAnswer(clickedCardData) {
+            if (isChecking || isGameOver) return;
+            isChecking = true;
+
+            if (!scoringResult.isFirstCategoryCompleted) {
+                scoringResult.trialsToCompleteFirstCategory++;
+            }
+            if (scoringResult.isFirstCorrectMade && scoringResult.trialCountAfterFirstCorrect < TOTAL_TRIALS_AFTER_FIRST_CORRECT) {
+                scoringResult.trialCountAfterFirstCorrect++;
+            }
+
+            const isCorrect = clickedCardData[currentRule] == responseCard[currentRule];
+            if (isCorrect) {
+                await showFeedback('O', '정답입니다', '#EF4444');
+                consecutiveCorrect++;
+                scoringResult.lastIncorrectAppliedRule = null; 
+
+                if (!scoringResult.isFirstCorrectMade) {
+                    scoringResult.isFirstCorrectMade = true;
+                }
+                if (scoringResult.trialCountAfterFirstCorrect <= TOTAL_TRIALS_AFTER_FIRST_CORRECT) {
+                    scoringResult.correctCountAfterFirstCorrect++;
+                }
+
+                if (consecutiveCorrect === 5) {
+                    if (!scoringResult.isFirstCategoryCompleted) {
+                        scoringResult.isFirstCategoryCompleted = true;
+                    }
+                    consecutiveCorrect = 0;
+                    changeRule();
+                }
+            } else { 
+                await showFeedback('X', '오답입니다', '#EF4444');
+                if (consecutiveCorrect >= 2) {
+                    scoringResult.failureToMaintainSet++;
+                }
+
+                const appliedRule = findAppliedRule(clickedCardData, responseCard);
+                if (appliedRule && appliedRule === scoringResult.lastIncorrectAppliedRule && appliedRule !== scoringResult.lastRuleBeforeChange) {
+                    scoringResult.perseverativeResponses++;
+                }
+                scoringResult.lastIncorrectAppliedRule = appliedRule;
+                scoringResult.lastRuleBeforeChange = null; 
+                consecutiveCorrect = 0;
+            }
+            
+            if (scoringResult.isFirstCorrectMade && scoringResult.trialCountAfterFirstCorrect >= TOTAL_TRIALS_AFTER_FIRST_CORRECT) {
+                handleGameOver();
+                isChecking = false;
+                return;
+            }
+
+            generateResponseCard();
+            renderAllCards();
+            isChecking = false;
+        }
+
+        function changeRule() {
+            scoringResult.lastRuleBeforeChange = currentRule;
+            if (availableRules.length === 0) {
+                availableRules = shuffle(RULES.filter(rule => rule !== currentRule));
+            }
+            currentRule = availableRules.pop();
+            console.log("새로운 규칙으로 변경됨 (사용자에게는 보이지 않음):", currentRule);
+        }
+
+
+        function startGame() {
+            isGameOver = false;
+            isChecking = false;
+            instructionText.textContent = '숨겨진 규칙을 찾아 위 카드를 아래 카드 중 하나로 분류하세요.';
+            
+            initializeScoring();
+
+            consecutiveCorrect = 0;
+            const allRules = shuffle([...RULES]);
+            currentRule = allRules.pop();
+            availableRules = allRules;
+            console.log("시작 규칙:", currentRule);
+
+            generateStimulusCards();
+            generateResponseCard();
+            renderAllCards();
+        }
+
+        stimulusContainer.addEventListener('click', (e) => {
+            const clickedCard = e.target.closest('.stimulus-card');
+            if (clickedCard) {
+                checkAnswer(clickedCard.dataset);
+            }
+        });
+        
+        homeButton.addEventListener('click', () => {
+            window.location.href = "{{ url_for('index') }}";
+        });
+
+        window.onload = startGame;
+    </script>
+</body>
+</html>
