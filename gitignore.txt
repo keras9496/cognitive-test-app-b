@@ -1,0 +1,13 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Instance Folder (로컬 DB 등)
+/instance/
+
+# Virtual Environment
+venv/
+.venv/
+env/
