@@ -7,24 +7,18 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&display=swap" rel="stylesheet">
     <style>
-        body {
-            font-family: 'Noto Sans KR', sans-serif;
-        }
-        th, td {
-            @apply px-4 py-3 border border-gray-300 text-center;
-        }
-        th {
-            @apply bg-gray-100 font-bold;
-        }
+        body { font-family: 'Noto Sans KR', sans-serif; }
+        th, td { @apply px-4 py-3 border border-gray-300 text-center; }
+        th { @apply bg-gray-100 font-bold; }
     </style>
 </head>
 <body class="bg-gray-50 p-8">
     <div class="max-w-7xl mx-auto">
         <div class="flex justify-between items-center mb-6">
             <h1 class="text-3xl font-bold text-gray-800">위스콘신 카드 정렬 검사 결과</h1>
-            <a href="{{ url_for('show_results', pw=request.args.get('pw')) }}" 
+            <a href="{{ url_for('show_results', pw=request.args.get('pw')) }}"
                class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg">
-                숫자 암기 결과 보기
+                전체 결과 보기
             </a>
         </div>
         <div class="overflow-x-auto bg-white rounded-lg shadow">
@@ -32,8 +26,8 @@
                 <thead class="bg-gray-50">
                     <tr>
                         <th>ID</th>
-                        <th>닉네임</th>
-                        <th>이름</th>
+                        <th>선생님 이름</th>
+                        <th>이용자 이름</th>
                         <th>나이</th>
                         <th>성별</th>
                         <th>검사일</th>
@@ -47,8 +41,8 @@
                     {% for result in results %}
                     <tr class="hover:bg-gray-50">
                         <td>{{ result.id }}</td>
-                        <td>{{ result.nickname }}</td>
-                        <td>{{ result.name }}</td>
+                        <td>{{ result.teacher_name }}</td>
+                        <td>{{ result.user_name }}</td>
                         <td>{{ result.age }}</td>
                         <td>{{ result.gender }}</td>
                         <td>{{ result.test_date }}</td>
