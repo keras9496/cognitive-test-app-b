@@ -10,31 +10,19 @@
         body { font-family: 'Noto Sans KR', sans-serif; }
         th, td { @apply px-4 py-3 border border-gray-300 text-center align-top; }
         th { @apply bg-gray-100 font-bold; }
-        .fail-record { @apply text-left text-sm p-2; }
-        .fail-record div { @apply mb-1; }
     </style>
 </head>
 <body class="bg-gray-50 p-8">
     <div class="max-w-7xl mx-auto">
         <div class="flex justify-between items-center mb-6">
-            <h1 class="text-3xl font-bold text-gray-800">A Set 숫자 암기 테스트 결과</h1>
-            <div>
-                <a href="{{ url_for('show_b_set_results', pw=request.args.get('pw')) }}" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg">B Set 결과 보기</a>
-                <a href="{{ url_for('show_wisconsin_results', pw=request.args.get('pw')) }}" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg">위스콘신 결과 보기</a>
-            </div>
+            <h1 class="text-3xl font-bold text-gray-800">A Set 시각 순서 기억 테스트 결과</h1>
+            <a href="{{ url_for('show_results', pw=request.args.get('pw')) }}" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg">전체 결과 보기</a>
         </div>
         <div class="overflow-x-auto bg-white rounded-lg shadow">
             <table class="min-w-full border-collapse">
-                <thead class="bg-gray-50">
+                 <thead class="bg-gray-50">
                     <tr>
-                        <th class="w-1/12">ID</th>
-                        <th class="w-2/12">선생님 이름</th>
-                        <th class="w-2/12">이용자 이름</th>
-                        <th class="w-1/12">나이</th>
-                        <th class="w-1/12">성별</th>
-                        <th class="w-2/12">검사일</th>
-                        <th class="w-1/12">최종 성공 단계</th>
-                        <th class="w-3/12">실패 기록</th>
+                        <th>ID</th><th>교사명</th><th>사용자명</th><th>나이</th><th>성별</th><th>검사일</th><th>레벨</th><th>정답</th><th>오답</th><th>평균유사도</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -46,25 +34,13 @@
                         <td>{{ result.age }}</td>
                         <td>{{ result.gender }}</td>
                         <td>{{ result.test_date }}</td>
-                        <td class="font-bold text-blue-600 text-lg">{{ result.high_score }}</td>
-                        <td>
-                            {% if result.failed_attempts_list %}
-                                <div class="fail-record">
-                                {% for attempt in result.failed_attempts_list %}
-                                    <div class="p-2 border-b border-gray-200 last:border-b-0">
-                                        <p><strong>실패 단계:</strong> {{ attempt.level }}자리</p>
-                                        <p><strong>정답:</strong> {{ attempt.correct_answer }}</p>
-                                        <p><strong>입력값:</strong> {{ attempt.user_answer }}</p>
-                                    </div>
-                                {% endfor %}
-                                </div>
-                            {% else %}
-                                <span class="text-gray-500">없음</span>
-                            {% endif %}
-                        </td>
+                        <td>{{ result.level }}</td>
+                        <td class="font-bold text-green-600">{{ result.correct }}</td>
+                        <td class="font-bold text-red-600">{{ result.wrong }}</td>
+                        <td class="font-bold text-blue-600">{{ "%.1f%%"|format(result.avg_similarity * 100) }}</td>
                     </tr>
                     {% else %}
-                    <tr><td colspan="8" class="py-4">아직 저장된 결과가 없습니다.</td></tr>
+                    <tr><td colspan="10" class="py-4">아직 저장된 결과가 없습니다.</td></tr>
                     {% endfor %}
                 </tbody>
             </table>
