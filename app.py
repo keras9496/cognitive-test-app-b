@@ -39,6 +39,7 @@ BOX_SIZE = 50
 
 # --- 데이터베이스 모델 정의 ---
 
+# A 세트: 시각 순서 기억 검사 결과 모델
 class ASetSequenceMemoryResult(db.Model):
     __tablename__ = 'a_set_sequence_memory_results'
     id = db.Column(db.Integer, primary_key=True)
@@ -53,6 +54,7 @@ class ASetSequenceMemoryResult(db.Model):
     wrong = db.Column(db.Integer, nullable=False)
     avg_similarity = db.Column(db.Float, nullable=False)
 
+# B 세트: 숫자 암기 테스트 결과 모델
 class BSetDigitSpanResult(db.Model):
     __tablename__ = 'b_set_digit_span_results'
     id = db.Column(db.Integer, primary_key=True)
@@ -65,25 +67,12 @@ class BSetDigitSpanResult(db.Model):
     high_score = db.Column(db.Integer, nullable=False)
     failed_attempts = db.Column(db.Text, nullable=True)
 
-class WisconsinResult(db.Model):
-    __tablename__ = 'wisconsin_results'
-    id = db.Column(db.Integer, primary_key=True)
-    teacher_name = db.Column(db.String(80), nullable=False)
-    user_name = db.Column(db.String(80), nullable=False)
-    age = db.Column(db.Integer, nullable=False)
-    gender = db.Column(db.String(10), nullable=False)
-    test_date = db.Column(db.String(20), nullable=False)
-    test_name = db.Column(db.String(80), nullable=False, server_default='위스콘신 카드 정렬 검사')
-    perseverative_responses = db.Column(db.Integer, nullable=False)
-    trials_to_complete_first_category = db.Column(db.Integer, nullable=False)
-    failure_to_maintain_set = db.Column(db.Integer, nullable=False)
-    correct_rate = db.Column(db.Float, nullable=False)
+# wisconsin_results 모델은 제거되었습니다.
 
 with app.app_context():
     db.create_all()
 
-# --- 핵심 로직 함수들 ---
-
+# --- 핵심 로직 함수 ---
 def create_sequence_problem(level_index, is_practice=False):
     if is_practice:
         level_info = {'name': 'Practice', 'box_count': 3, 'flash_count': 2}
@@ -182,11 +171,6 @@ def b_set_digit_span_test():
     if 'teacher_name' not in session: return redirect(url_for('index'))
     return render_template('b_set_digit_span_test.html')
 
-@app.route("/wisconsin-test")
-def wisconsin_test():
-    if 'teacher_name' not in session: return redirect(url_for('index'))
-    return render_template('wisconsin_test.html')
-
 # --- API 엔드포인트 ---
 
 @app.route('/api/a-set/get-practice-problem')
@@ -212,7 +196,11 @@ def get_a_set_problem():
         if save_a_set_sequence_results_to_db():
             session.pop('a_set_score', None)
             session.modified = True
-            return jsonify({"status": "completed", "next_url": url_for('wisconsin_test')})
+            return jsonify({
+                "status": "completed", 
+                "message": "모든 검사가 완료되었습니다. 수고하셨습니다!",
+                "next_url": url_for('index')  # 메인 화면으로 이동
+            })
         else:
             return jsonify({"error": "Failed to save results"}), 500
 
@@ -261,38 +249,6 @@ def submit_b_set_result():
     db.session.commit()
     return jsonify({"status": "success"})
 
-@app.route('/api/submit-wisconsin-result', methods=['POST'])
-def submit_wisconsin_result():
-    if 'teacher_name' not in session:
-        return jsonify({"status": "error", "message": "세션 만료"}), 403
-    
-    data = request.get_json()
-    if not data:
-        return jsonify({"status": "error", "message": "데이터 없음"}), 400
-
-    try:
-        result_entry = WisconsinResult(
-            teacher_name=session.get('teacher_name'),
-            user_name=session.get('user_name'),
-            age=session.get('age'),
-            gender=session.get('gender'),
-            test_date=session.get('test_date'),
-            perseverative_responses=int(data.get('perseverativeResponses', 0)),
-            trials_to_complete_first_category=int(data.get('trialsToCompleteFirstCategory', 0)),
-            failure_to_maintain_set=int(data.get('failureToMaintainSet', 0)),
-            correct_rate=float(data.get('correctRate', 0.0))
-        )
-        db.session.add(result_entry)
-        db.session.commit()
-        return jsonify({"status": "success", "message": "결과 저장 성공"})
-    except (ValueError, TypeError) as e:
-        db.session.rollback()
-        return jsonify({"status": "error", "message": f"데이터 형식 오류: {e}"}), 400
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({"status": "error", "message": f"서버 오류: {e}"}), 500
-
-
 # --- 결과 페이지 (관리자용) ---
 @app.route("/results")
 def show_results():
@@ -303,7 +259,6 @@ def show_results():
     try:
         a_set_seq_results = ASetSequenceMemoryResult.query.order_by(ASetSequenceMemoryResult.id.desc()).all()
         b_set_digit_results_raw = BSetDigitSpanResult.query.order_by(BSetDigitSpanResult.id.desc()).all()
-        wisconsin_results = WisconsinResult.query.order_by(WisconsinResult.id.desc()).all()
         
         b_set_digit_results = []
         for r in b_set_digit_results_raw:
@@ -316,8 +271,7 @@ def show_results():
         return render_template(
             'results.html', 
             a_set_seq_results=a_set_seq_results,
-            b_set_digit_results=b_set_digit_results,
-            wisconsin_results=wisconsin_results
+            b_set_digit_results=b_set_digit_results
         )
     except Exception as e:
         return f"결과 페이지 로딩 중 오류 발생: {e}", 500
