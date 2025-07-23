@@ -39,7 +39,6 @@ BOX_SIZE = 50
 
 # --- 데이터베이스 모델 정의 ---
 
-# A 세트: 시각 순서 기억 검사 결과 모델
 class ASetSequenceMemoryResult(db.Model):
     __tablename__ = 'a_set_sequence_memory_results'
     id = db.Column(db.Integer, primary_key=True)
@@ -54,10 +53,6 @@ class ASetSequenceMemoryResult(db.Model):
     wrong = db.Column(db.Integer, nullable=False)
     avg_similarity = db.Column(db.Float, nullable=False)
 
-    def __repr__(self):
-        return f'<ASetSequenceMemoryResult {self.teacher_name} - {self.user_name} - {self.level}>'
-
-# B 세트: 숫자 암기 테스트 결과 모델
 class BSetDigitSpanResult(db.Model):
     __tablename__ = 'b_set_digit_span_results'
     id = db.Column(db.Integer, primary_key=True)
@@ -70,10 +65,6 @@ class BSetDigitSpanResult(db.Model):
     high_score = db.Column(db.Integer, nullable=False)
     failed_attempts = db.Column(db.Text, nullable=True)
 
-    def __repr__(self):
-        return f'<BSetDigitSpanResult {self.teacher_name} - {self.user_name} - Score: {self.high_score}>'
-
-# 위스콘신 테스트 결과 모델
 class WisconsinResult(db.Model):
     __tablename__ = 'wisconsin_results'
     id = db.Column(db.Integer, primary_key=True)
@@ -88,13 +79,11 @@ class WisconsinResult(db.Model):
     failure_to_maintain_set = db.Column(db.Integer, nullable=False)
     correct_rate = db.Column(db.Float, nullable=False)
 
-    def __repr__(self):
-        return f'<WisconsinResult {self.teacher_name}>'
-
 with app.app_context():
     db.create_all()
 
-# --- 핵심 로직 함수 ---
+# --- 핵심 로직 함수들 ---
+
 def create_sequence_problem(level_index, is_practice=False):
     if is_practice:
         level_info = {'name': 'Practice', 'box_count': 3, 'flash_count': 2}
@@ -118,39 +107,28 @@ def create_sequence_problem(level_index, is_practice=False):
     
     flash_sequence = random.sample(range(box_count), flash_count)
     return {
-        "level_name": level_info['name'],
-        "flash_count": flash_count,
-        "boxes": boxes,
-        "flash_sequence": flash_sequence
+        "level_name": level_info['name'], "flash_count": flash_count,
+        "boxes": boxes, "flash_sequence": flash_sequence
     }
 
 def save_a_set_sequence_results_to_db():
     try:
         if 'teacher_name' not in session or 'a_set_score' not in session:
-            print("세션 정보 부족으로 A 세트 결과 저장 실패")
             return False
-
-        teacher_name = session.get('teacher_name')
-        user_name = session.get('user_name')
-        age = session.get('age')
-        gender = session.get('gender')
-        test_date = session.get('test_date')
         
         for level_name, data in session.get('a_set_score', {}).items():
             if not data.get('similarities'): continue
             avg_sim = sum(data['similarities']) / len(data['similarities'])
             result_entry = ASetSequenceMemoryResult(
-                teacher_name=teacher_name, user_name=user_name, age=age, gender=gender,
-                test_date=test_date, level=level_name, correct=data['correct'],
+                teacher_name=session['teacher_name'], user_name=session['user_name'], age=session['age'], gender=session['gender'],
+                test_date=session['test_date'], level=level_name, correct=data['correct'],
                 wrong=data['wrong'], avg_similarity=round(avg_sim, 4)
             )
             db.session.add(result_entry)
         
         db.session.commit()
-        print(f"{teacher_name}-{user_name}님의 A 세트 시각 순서 기억 검사 결과가 DB에 저장되었습니다.")
         return True
     except Exception as e:
-        print(f"DB 저장 중 오류: {e}")
         db.session.rollback()
         return False
 
@@ -178,19 +156,17 @@ def start_test():
         
         session.modified = True
 
-        if total_tests % 2 == 0: # A 세트
+        if total_tests % 2 == 0:
             session['a_set_level_index'] = 0
             session['a_set_problem_in_level'] = 1
             session['a_set_score'] = {lvl['name']: {'correct': 0, 'wrong': 0, 'similarities': []} for lvl in SEQUENCE_LEVELS}
             return redirect(url_for('a_set_practice_page'))
-        else: # B 세트
+        else:
             return redirect(url_for('b_set_digit_span_test'))
             
-    except (ValueError, TypeError) as e:
-        print(f"사용자 입력 처리 중 오류: {e}")
+    except (ValueError, TypeError):
         return redirect(url_for('index'))
 
-# --- A Set (시각 순서 기억) ---
 @app.route("/a-set/practice")
 def a_set_practice_page():
     if 'teacher_name' not in session: return redirect(url_for('index'))
@@ -201,13 +177,11 @@ def a_set_test_page():
     if 'teacher_name' not in session: return redirect(url_for('index'))
     return render_template('a_set_sequence_test.html')
 
-# --- B Set (숫자 암기) ---
 @app.route("/b-set/test")
 def b_set_digit_span_test():
     if 'teacher_name' not in session: return redirect(url_for('index'))
     return render_template('b_set_digit_span_test.html')
 
-# --- 공통 테스트 ---
 @app.route("/wisconsin-test")
 def wisconsin_test():
     if 'teacher_name' not in session: return redirect(url_for('index'))
@@ -215,12 +189,12 @@ def wisconsin_test():
 
 # --- API 엔드포인트 ---
 
-# A Set: 시각 순서 기억 API
 @app.route('/api/a-set/get-practice-problem')
 def get_a_set_practice_problem():
     if 'teacher_name' not in session: return jsonify({"error": "Session not started"}), 403
     problem = create_sequence_problem(0, is_practice=True)
     session['a_set_practice_problem'] = problem
+    session.modified = True
     return jsonify(problem)
 
 @app.route('/api/a-set/submit-practice-answer', methods=['POST'])
@@ -228,54 +202,41 @@ def submit_a_set_practice_answer():
     data = request.get_json()
     user_answer = data.get('answer')
     correct_answer = session.get('a_set_practice_problem', {}).get('flash_sequence')
-    if user_answer == correct_answer:
-        return jsonify({"status": "correct", "message": "정답입니다! 본 테스트를 시작합니다."})
-    else:
-        return jsonify({"status": "incorrect", "message": "틀렸습니다. 다시 시도해보세요."})
+    return jsonify({"status": "correct" if user_answer == correct_answer else "incorrect"})
 
 @app.route('/api/a-set/get-problem')
 def get_a_set_problem():
     if 'teacher_name' not in session: return jsonify({"error": "Session not started"}), 403
-    
     level_index = session.get('a_set_level_index', 0)
     if level_index >= len(SEQUENCE_LEVELS):
-        save_success = save_a_set_sequence_results_to_db()
-        if save_success:
+        if save_a_set_sequence_results_to_db():
             session.pop('a_set_score', None)
             session.modified = True
-            return jsonify({
-                "status": "completed", 
-                "message": "A세트 1차 검사가 완료되었습니다. 다음 검사를 진행합니다.", 
-                "next_url": url_for('wisconsin_test')
-            })
+            return jsonify({"status": "completed", "next_url": url_for('wisconsin_test')})
         else:
             return jsonify({"error": "Failed to save results"}), 500
 
     problem = create_sequence_problem(level_index)
     session['a_set_current_problem'] = problem
-    problem_info = {
-        "level_name": problem.get('level_name'), "flash_count": problem.get('flash_count'),
-        "boxes": problem.get('boxes'), "flash_sequence": problem.get('flash_sequence'),
-        "problem_in_level": session.get('a_set_problem_in_level'), "total_problems": PROBLEMS_PER_SEQUENCE_LEVEL
-    }
-    return jsonify(problem_info)
+    session.modified = True
+    problem['problem_in_level'] = session.get('a_set_problem_in_level')
+    problem['total_problems'] = PROBLEMS_PER_SEQUENCE_LEVEL
+    return jsonify(problem)
 
 @app.route('/api/a-set/submit-answer', methods=['POST'])
 def submit_a_set_answer():
     data = request.get_json()
     user_answer = data.get('answer')
-    current_problem = session.get('a_set_current_problem')
-    correct_answer = current_problem['flash_sequence']
+    problem = session.get('a_set_current_problem')
+    correct_answer = problem['flash_sequence']
     
-    is_correct = (user_answer == correct_answer)
     matches = sum(1 for a, b in zip(user_answer, correct_answer) if a == b)
     similarity = matches / len(correct_answer) if correct_answer else 0
-    
-    level_name = SEQUENCE_LEVELS[session.get('a_set_level_index', 0)]['name']
+    level_name = problem['level_name']
+
     score_data = session['a_set_score'][level_name]
-    
-    if is_correct: score_data['correct'] += 1
-    else: score_data['wrong'] += 1
+    score_data['correct'] += 1 if user_answer == correct_answer else 0
+    score_data['wrong'] += 1 if user_answer != correct_answer else 0
     score_data['similarities'].append(similarity)
     
     session['a_set_problem_in_level'] += 1
@@ -286,36 +247,51 @@ def submit_a_set_answer():
     session.modified = True
     return jsonify({"status": "next_problem"})
 
-# B Set: 숫자 암기 API
 @app.route('/api/submit-b-set-result', methods=['POST'])
 def submit_b_set_result():
-    if 'teacher_name' not in session: return jsonify({"status": "error", "message": "세션 만료"}), 403
+    if 'teacher_name' not in session: return jsonify({"status": "error"}), 403
     data = request.get_json()
     result_entry = BSetDigitSpanResult(
-        teacher_name=session.get('teacher_name'), user_name=session.get('user_name'),
-        age=session.get('age'), gender=session.get('gender'), test_date=session.get('test_date'),
-        high_score=data.get('highScore'), failed_attempts=json.dumps(data.get('failedAttempts', []))
+        teacher_name=session['teacher_name'], user_name=session['user_name'], age=session['age'],
+        gender=session['gender'], test_date=session['test_date'],
+        high_score=int(data.get('highScore', 0)),
+        failed_attempts=json.dumps(data.get('failedAttempts', []))
     )
     db.session.add(result_entry)
     db.session.commit()
-    return jsonify({"status": "success", "message": "결과 저장 성공"})
+    return jsonify({"status": "success"})
 
-# 위스콘신 API
 @app.route('/api/submit-wisconsin-result', methods=['POST'])
 def submit_wisconsin_result():
-    if 'teacher_name' not in session: return jsonify({"status": "error", "message": "세션 만료"}), 403
+    if 'teacher_name' not in session:
+        return jsonify({"status": "error", "message": "세션 만료"}), 403
+    
     data = request.get_json()
-    result_entry = WisconsinResult(
-        teacher_name=session.get('teacher_name'), user_name=session.get('user_name'),
-        age=session.get('age'), gender=session.get('gender'), test_date=session.get('test_date'),
-        perseverative_responses=data.get('perseverativeResponses'),
-        trials_to_complete_first_category=data.get('trialsToCompleteFirstCategory'),
-        failure_to_maintain_set=data.get('failureToMaintainSet'),
-        correct_rate=data.get('correctRate')
-    )
-    db.session.add(result_entry)
-    db.session.commit()
-    return jsonify({"status": "success", "message": "결과 저장 성공"})
+    if not data:
+        return jsonify({"status": "error", "message": "데이터 없음"}), 400
+
+    try:
+        result_entry = WisconsinResult(
+            teacher_name=session.get('teacher_name'),
+            user_name=session.get('user_name'),
+            age=session.get('age'),
+            gender=session.get('gender'),
+            test_date=session.get('test_date'),
+            perseverative_responses=int(data.get('perseverativeResponses', 0)),
+            trials_to_complete_first_category=int(data.get('trialsToCompleteFirstCategory', 0)),
+            failure_to_maintain_set=int(data.get('failureToMaintainSet', 0)),
+            correct_rate=float(data.get('correctRate', 0.0))
+        )
+        db.session.add(result_entry)
+        db.session.commit()
+        return jsonify({"status": "success", "message": "결과 저장 성공"})
+    except (ValueError, TypeError) as e:
+        db.session.rollback()
+        return jsonify({"status": "error", "message": f"데이터 형식 오류: {e}"}), 400
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"status": "error", "message": f"서버 오류: {e}"}), 500
+
 
 # --- 결과 페이지 (관리자용) ---
 @app.route("/results")
@@ -324,23 +300,27 @@ def show_results():
     admin_pw = os.environ.get('ADMIN_PASSWORD', 'w123456789')
     if password != admin_pw: return "접근 권한이 없습니다.", 403
 
-    # A 세트, B 세트, 위스콘신 결과 모두 조회
-    a_set_seq_results = ASetSequenceMemoryResult.query.order_by(ASetSequenceMemoryResult.id.desc()).all()
-    b_set_digit_results_raw = BSetDigitSpanResult.query.order_by(BSetDigitSpanResult.id.desc()).all()
-    wisconsin_results = WisconsinResult.query.order_by(WisconsinResult.id.desc()).all()
-    
-    b_set_digit_results = []
-    for r in b_set_digit_results_raw:
-        try: r.failed_attempts_list = json.loads(r.failed_attempts or '[]')
-        except json.JSONDecodeError: r.failed_attempts_list = []
-        b_set_digit_results.append(r)
+    try:
+        a_set_seq_results = ASetSequenceMemoryResult.query.order_by(ASetSequenceMemoryResult.id.desc()).all()
+        b_set_digit_results_raw = BSetDigitSpanResult.query.order_by(BSetDigitSpanResult.id.desc()).all()
+        wisconsin_results = WisconsinResult.query.order_by(WisconsinResult.id.desc()).all()
+        
+        b_set_digit_results = []
+        for r in b_set_digit_results_raw:
+            try:
+                r.failed_attempts_list = json.loads(r.failed_attempts or '[]')
+            except json.JSONDecodeError:
+                r.failed_attempts_list = []
+            b_set_digit_results.append(r)
 
-    return render_template(
-        'results.html', 
-        a_set_seq_results=a_set_seq_results,
-        b_set_digit_results=b_set_digit_results,
-        wisconsin_results=wisconsin_results
-    )
+        return render_template(
+            'results.html', 
+            a_set_seq_results=a_set_seq_results,
+            b_set_digit_results=b_set_digit_results,
+            wisconsin_results=wisconsin_results
+        )
+    except Exception as e:
+        return f"결과 페이지 로딩 중 오류 발생: {e}", 500
 
 if __name__ == "__main__":
     app.run(debug=True, port=5001)
