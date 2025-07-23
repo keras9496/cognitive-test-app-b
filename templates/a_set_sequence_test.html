@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>A Set - 시각 순서 기억 검사</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Noto Sans KR', sans-serif; }
+    </style>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen">
+    <div class="w-full max-w-2xl p-8 space-y-6 bg-white rounded-lg shadow-md text-center">
+        <h2 id="message-label" class="text-2xl font-bold text-gray-800 min-h-[64px] flex items-center justify-center">불러오는 중...</h2>
+        <canvas id="test-canvas" width="500" height="500" class="mx-auto bg-gray-200 rounded-lg"></canvas>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/a_set_test.js') }}"></script>
+</body>
+</html>
